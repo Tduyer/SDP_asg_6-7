@@ -1,6 +1,6 @@
-package com.example.kmtn;
+package com.example.wthapp;
 
 public interface UpdateStrategy {
-    WeatherData fetchWeatherData();
+    WeatherData fetchWeatherFor(String city);
     String name();
 }

@@ -1,20 +1,10 @@
-package com.example.kmtn;
+package com.example.wthapp;
 
-import android.os.Handler;
-import android.os.Looper;
-import android.widget.TextView;
+import android.content.Context;
+import android.widget.Toast;
 
 public class Utils {
-    private static final Handler MAIN = new Handler(Looper.getMainLooper());
-
-    public static void appendToTextView(TextView tv, String text) {
-        MAIN.post(() -> {
-            tv.append(text);
-            // auto-scroll: set selection if it's EditText; for TextView, we can request layout
-        });
-    }
-
-    public static String now() {
-        return Logger.now();
+    public static void toast(Context ctx, String msg) {
+        Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show();
     }
 }

@@ -1,26 +1,15 @@
-package com.example.kmtn;
+package com.example.wthapp;
 
 import android.widget.TextView;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
 public class Logger {
-    private static Logger instance;
-    private final DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final SimpleDateFormat fmt = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
 
-    private Logger() { }
-
-    public static synchronized Logger getInstance() {
-        if (instance == null) instance = new Logger();
-        return instance;
-    }
-
-    public void log(TextView tv, String msg) {
-        String line = String.format("[%s] %s\n", LocalDateTime.now().format(fmt), msg);
-        Utils.appendToTextView(tv, line);
-    }
-
-    public static String now() {
-        return LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+    public static void log(TextView tv, String msg) {
+        String line = "[" + fmt.format(new Date()) + "] " + msg + "\n";
+        tv.post(() -> tv.append(line));
     }
 }

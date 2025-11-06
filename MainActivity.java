@@ -1,159 +1,163 @@
-package com.example.kmtn;
+package com.example.wthapp;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.view.View;
 import android.widget.*;
-import java.util.ArrayList;
-import java.util.List;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.net.URL;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.Scanner;
 
 public class MainActivity extends AppCompatActivity {
 
-    private WeatherStation station;
-    private TextView tvLog;
-    private Spinner spinnerStrategy, spinnerObserverType;
-    private EditText etTemp, etHum, etPress, etObserverName;
-    private ListView listObservers;
-    private ArrayAdapter<String> observersAdapter;
-    private final List<WeatherObserver> observers = new ArrayList<>();
-    private Handler schedulerHandler;
-    private Runnable scheduledRunnable;
-    private int scheduledIntervalSec = 5;
+    private TextView tvCity, tvTemperature, tvDescription, tvDateTime;
+    private ImageView ivWeatherIcon;
+    private RecyclerView rvHours;
+    private Button btnRefresh, btnSearch;
+    private EditText etCity;
+    private Spinner spUnits;
+
+    private HourAdapter hourAdapter;
+    private final String apiKey = "828211e914bcfa712911bc7e32942196";
+    private String selectedUnits = "metric";
+    private final String defaultCity = "Greenwich";
+
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final Handler handler = new Handler(Looper.getMainLooper());
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        tvLog = findViewById(R.id.tvLog);
-        spinnerStrategy = findViewById(R.id.spinnerStrategy);
-        spinnerObserverType = findViewById(R.id.spinnerObserverType);
-        etTemp = findViewById(R.id.etTemp);
-        etHum = findViewById(R.id.etHum);
-        etPress = findViewById(R.id.etPress);
-        etObserverName = findViewById(R.id.etObserverName);
-        listObservers = findViewById(R.id.listObservers);
+        tvCity = findViewById(R.id.tvCity);
+        tvTemperature = findViewById(R.id.tvTemperature);
+        tvDescription = findViewById(R.id.tvDescription);
+        tvDateTime = findViewById(R.id.tvDateTime);
+        ivWeatherIcon = findViewById(R.id.ivWeatherIcon);
+        rvHours = findViewById(R.id.rvHours);
+        btnRefresh = findViewById(R.id.btnRefresh);
+        btnSearch = findViewById(R.id.btnSearch);
+        etCity = findViewById(R.id.etCity);
+        spUnits = findViewById(R.id.spUnits);
 
-        ArrayAdapter<String> stratAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item,
-                new String[]{"Manual", "Sensor", "Scheduled"});
-        stratAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        spinnerStrategy.setAdapter(stratAdapter);
+        rvHours.setLayoutManager(new LinearLayoutManager(this));
+        hourAdapter = new HourAdapter(new ArrayList<>());
+        rvHours.setAdapter(hourAdapter);
 
-        ArrayAdapter<String> obsAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item,
-                new String[]{"UI", "Toast"});
-        obsAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        spinnerObserverType.setAdapter(obsAdapter);
-
-        observersAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, new ArrayList<>());
-        listObservers.setAdapter(observersAdapter);
-
-        station = new WeatherStation(new ManualInputStrategy(20.0, 50.0, 1013.0), tvLog);
-
-        findViewById(R.id.btnUpdate).setOnClickListener(v -> onUpdateNow());
-        findViewById(R.id.btnAddObserver).setOnClickListener(v -> onAddObserver());
-        findViewById(R.id.btnStartScheduled).setOnClickListener(v -> onStartScheduled());
-        findViewById(R.id.btnStopScheduled).setOnClickListener(v -> onStopScheduled());
-
-        listObservers.setOnItemLongClickListener((parent, view, position, id) -> {
-            if (position >= 0 && position < observers.size()) {
-                WeatherObserver rem = observers.get(position);
-                station.removeObserver(rem);
-                observers.remove(position);
-                observersAdapter.remove(observersAdapter.getItem(position));
-                observersAdapter.notifyDataSetChanged();
-                return true;
-            }
-            return false;
-        });
-
-        spinnerStrategy.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override public void onItemSelected(AdapterView<?> parent, View view, int pos, long id) {
-                String sel = (String) parent.getItemAtPosition(pos);
-                switch (sel.toLowerCase()) {
-                    case "manual":
-                        station.setStrategy(new ManualInputStrategy(
-                                parseDoubleOrDefault(etTemp.getText().toString(), 20.0),
-                                parseDoubleOrDefault(etHum.getText().toString(), 50.0),
-                                parseDoubleOrDefault(etPress.getText().toString(), 1013.0)
-                        ));
-                        break;
-                    case "sensor":
-                        station.setStrategy(new SensorUpdateStrategy());
-                        break;
-                    case "scheduled":
-                        station.setStrategy(new ScheduledUpdateStrategy());
-                        break;
-                }
-            }
-            @Override public void onNothingSelected(AdapterView<?> parent) {}
-        });
-    }
-
-    private double parseDoubleOrDefault(String s, double def) {
-        try { return Double.parseDouble(s.trim()); }
-        catch (Exception e) { return def; }
-    }
-
-    private void onUpdateNow() {
-        if ("Manual".equalsIgnoreCase((String) spinnerStrategy.getSelectedItem())) {
-            station.setStrategy(new ManualInputStrategy(
-                    parseDoubleOrDefault(etTemp.getText().toString(), 20.0),
-                    parseDoubleOrDefault(etHum.getText().toString(), 50.0),
-                    parseDoubleOrDefault(etPress.getText().toString(), 1013.0)
-            ));
-        }
-        station.updateWeather();
-    }
-
-    private void onAddObserver() {
-        String type = (String) spinnerObserverType.getSelectedItem();
-        String id = etObserverName.getText().toString().trim();
-        if (id.isEmpty()) id = "Observer" + (observers.size() + 1);
-        WeatherObserver o = ObserverFactory.create(type, id, this, tvLog);
-        observers.add(o);
-        station.addObserver(o);
-        observersAdapter.add(o.getName());
-        observersAdapter.notifyDataSetChanged();
-        etObserverName.setText("");
-    }
-
-    private void onStartScheduled() {
-        if (schedulerHandlerActive()) {
-            Toast.makeText(this, "Scheduled already running", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        station.setStrategy(new ScheduledUpdateStrategy());
-        schedulerHandler = new Handler();
-        scheduledRunnable = new Runnable() {
+        spUnits.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
-            public void run() {
-                station.updateWeather();
-                schedulerHandler.postDelayed(this, scheduledIntervalSec * 1000L);
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                selectedUnits = (position == 0) ? "metric" : "imperial";
             }
-        };
-        schedulerHandler.post(scheduledRunnable);
-        Toast.makeText(this, "Scheduled updates started (" + scheduledIntervalSec + "s)", Toast.LENGTH_SHORT).show();
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+
+        btnRefresh.setOnClickListener(v -> fetchWeather(tvCity.getText().toString()));
+
+        btnSearch.setOnClickListener(v -> {
+            String city = etCity.getText().toString().trim();
+            if (!city.isEmpty()) {
+                fetchWeather(city);
+            } else {
+                Toast.makeText(MainActivity.this, "Please enter a city", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        fetchWeather(defaultCity);
     }
 
-    private boolean schedulerHandlerActive() {
-        return schedulerHandler != null && scheduledRunnable != null;
+    private void fetchWeather(String city) {
+        executor.execute(() -> {
+            WeatherData data = null;
+            try {
+                String urlStr = "https://api.openweathermap.org/data/2.5/forecast?q="
+                        + city + "&appid=" + apiKey + "&units=" + selectedUnits + "&lang=en";
+                URL url = new URL(urlStr);
+                Scanner sc = new Scanner(url.openStream());
+                StringBuilder sb = new StringBuilder();
+                while (sc.hasNext()) sb.append(sc.nextLine());
+                sc.close();
+
+                JSONObject json = new JSONObject(sb.toString());
+                JSONArray list = json.getJSONArray("list");
+                JSONObject main = list.getJSONObject(0).getJSONObject("main");
+
+                double temp = main.getDouble("temp");
+                String desc = list.getJSONObject(0)
+                        .getJSONArray("weather").getJSONObject(0).getString("description");
+
+                List<HourlyData> hours = new ArrayList<>();
+                for (int i = 0; i < Math.min(12, list.length()); i++) {
+                    JSONObject item = list.getJSONObject(i);
+                    JSONObject mainItem = item.getJSONObject("main");
+                    String time = item.getString("dt_txt").substring(11, 16);
+                    double t = mainItem.getDouble("temp");
+                    String d = item.getJSONArray("weather")
+                            .getJSONObject(0).getString("description");
+                    hours.add(new HourlyData(time, t, d));
+                }
+
+                data = new WeatherData(city, temp, 0, 0, hours, desc);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+            WeatherData finalData = data;
+            handler.post(() -> {
+                if (finalData == null) {
+                    Toast.makeText(MainActivity.this, "Error loading weather", Toast.LENGTH_SHORT).show();
+                } else {
+                    updateUI(finalData);
+                }
+            });
+        });
     }
 
-    private void onStopScheduled() {
-        if (schedulerHandler != null && scheduledRunnable != null) {
-            schedulerHandler.removeCallbacks(scheduledRunnable);
-            scheduledRunnable = null;
-            schedulerHandler = null;
-            Toast.makeText(this, "Scheduled stopped", Toast.LENGTH_SHORT).show();
+    private void updateUI(WeatherData data) {
+        tvCity.setText(data.getCity());
+        String unitSymbol = selectedUnits.equals("metric") ? "°C" : "°F";
+        tvTemperature.setText(String.format(Locale.getDefault(), "%.0f%s", data.getTemperature(), unitSymbol));
+        tvDescription.setText(capitalizeFirst(data.getDescription()));
+        tvDateTime.setText(new SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(new Date()));
+
+        String desc = data.getDescription().toLowerCase(Locale.ROOT);
+        if (desc.contains("rain")) {
+            ivWeatherIcon.setImageResource(android.R.drawable.ic_menu_compass);
+        } else if (desc.contains("cloud")) {
+            ivWeatherIcon.setImageResource(android.R.drawable.ic_menu_gallery);
+        } else if (desc.contains("snow")) {
+            ivWeatherIcon.setImageResource(android.R.drawable.ic_menu_mylocation);
         } else {
-            Toast.makeText(this, "No scheduled running", Toast.LENGTH_SHORT).show();
+            ivWeatherIcon.setImageResource(android.R.drawable.ic_menu_day);
         }
+
+        hourAdapter.setHours(data.getHourly());
+        ivWeatherIcon.setVisibility(View.GONE);
+    }
+
+    private String capitalizeFirst(String text) {
+        if (text == null || text.isEmpty()) return "";
+        return text.substring(0, 1).toUpperCase() + text.substring(1);
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        onStopScheduled();
+        executor.shutdownNow();
     }
 }

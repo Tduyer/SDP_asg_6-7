@@ -1,25 +1,29 @@
-package com.example.kmtn;
+package com.example.wthapp;
+
+import java.util.List;
 
 public class WeatherData {
-    private final double temperatureC;
+    private final String city;
+    private final double temperature;
     private final double humidity;
     private final double pressure;
+    private final List<HourlyData> hourly;
+    private final String description;
 
-    public WeatherData(double temperatureC, double humidity, double pressure) {
-        this.temperatureC = temperatureC;
+    public WeatherData(String city, double temperature, double humidity, double pressure,
+                       List<HourlyData> hourly, String description) {
+        this.city = city;
+        this.temperature = temperature;
         this.humidity = humidity;
         this.pressure = pressure;
+        this.hourly = hourly;
+        this.description = description;
     }
 
-    public double getTemperatureC() { return temperatureC; }
+    public String getCity() { return city; }
+    public double getTemperature() { return temperature; }
     public double getHumidity() { return humidity; }
     public double getPressure() { return pressure; }
-
-    public double getTemperatureF() { return temperatureC * 9.0 / 5.0 + 32.0; }
-
-    @Override
-    public String toString() {
-        return String.format("Temp: %.2f°C (%.2f°F), Humidity: %.2f%%, Pressure: %.2f hPa",
-                temperatureC, getTemperatureF(), humidity, pressure);
-    }
+    public List<HourlyData> getHourly() { return hourly; }
+    public String getDescription() { return description; }
 }

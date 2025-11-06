@@ -1,68 +1,53 @@
-package com.example.kmtn;
+package com.example.wthapp;
 
 import android.widget.TextView;
-
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class WeatherStation {
-    private final List<WeatherObserver> observers = new ArrayList<>();
     private UpdateStrategy strategy;
-    private WeatherData currentData;
     private final TextView logView;
+    private final List<WeatherObserver> observers = new ArrayList<>();
+    private final Map<String, WeatherData> dataMap = new ConcurrentHashMap<>();
 
-    public WeatherStation(UpdateStrategy initialStrategy, TextView logView) {
-        this.strategy = initialStrategy;
-        this.logView = logView;
-        Logger.getInstance().log(logView, "WeatherStation created. Strategy: " + (strategy != null ? strategy.name() : "none"));
-    }
-
-    public void setStrategy(UpdateStrategy strategy) {
-        Logger.getInstance().log(logView, "Strategy changed to: " + strategy.name());
+    public WeatherStation(UpdateStrategy strategy, TextView logView) {
         this.strategy = strategy;
+        this.logView = logView;
     }
 
-    public UpdateStrategy getStrategy() { return strategy; }
-
-    public void addObserver(WeatherObserver o) {
-        observers.add(o);
-        Logger.getInstance().log(logView, "Observer added: " + o.getName());
+    public void setStrategy(UpdateStrategy s) {
+        strategy = s;
+        Logger.log(logView, "Strategy set to " + s.name());
     }
 
-    public void removeObserver(WeatherObserver o) {
-        observers.remove(o);
-        Logger.getInstance().log(logView, "Observer removed: " + o.getName());
+    public void addObserver(WeatherObserver obs) {
+        observers.add(obs);
+        Logger.log(logView, "Observer added: " + obs.id());
     }
 
-    public List<WeatherObserver> getObserversSnapshot() {
-        return new ArrayList<>(observers);
+    public void removeObserver(WeatherObserver obs) {
+        observers.remove(obs);
     }
 
-    public void updateWeather() {
-        if (strategy == null) {
-            Logger.getInstance().log(logView, "No strategy set — skipping update.");
-            return;
-        }
-        WeatherData newData = strategy.fetchWeatherData();
-        boolean changed = hasChanged(newData);
-        currentData = newData;
-        Logger.getInstance().log(logView, "Weather updated via " + strategy.name() + ": " + currentData.toString());
-        if (changed) notifyObservers();
-        else Logger.getInstance().log(logView, "No significant change — observers not notified.");
+    public void updateCity(String city) {
+        WeatherData data = strategy.fetchWeatherFor(city);
+        dataMap.put(city, data);
+        Logger.log(logView, "Updated " + city + ": " + data.getTemperature());
+        notifyObservers(data);
     }
 
-    private boolean hasChanged(WeatherData newData) {
-        if (currentData == null) return true;
-        return Math.abs(currentData.getTemperatureC() - newData.getTemperatureC()) > 0.01
-                || Math.abs(currentData.getHumidity() - newData.getHumidity()) > 0.01
-                || Math.abs(currentData.getPressure() - newData.getPressure()) > 0.01;
+    public WeatherData getData(String city) {
+        return dataMap.get(city);
     }
 
-    private void notifyObservers() {
-        Logger.getInstance().log(logView, "Notifying " + observers.size() + " observers.");
-        for (WeatherObserver o : new ArrayList<>(observers)) {
-            try { o.update(currentData); }
-            catch (Exception e) { Logger.getInstance().log(logView, "Error notifying " + o.getName() + ": " + e.getMessage()); }
+    public void updateAll(List<String> cities) {
+        for (String c : cities) updateCity(c);
+    }
+
+    private void notifyObservers(WeatherData data) {
+        for (WeatherObserver obs : new ArrayList<>(observers)) {
+            obs.onWeatherUpdated(data);
         }
     }
 }
+

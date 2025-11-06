@@ -1,6 +1,6 @@
-package com.example.kmtn;
+package com.example.wthapp;
 
 public interface WeatherObserver {
-    void update(WeatherData data);
-    String getName();
+    void onWeatherUpdated(WeatherData data);
+    String id();
 }
